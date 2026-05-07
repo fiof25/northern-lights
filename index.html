@@ -5,13 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Northern Lights From Orbit</title>
 <style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #00020a; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #050508;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .frame {
+    position: relative;
+    width: 58vw;
+    height: 36vw;
+    max-height: 72vh;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 0 120px 60px rgba(0,0,0,0.95), 0 0 40px 12px rgba(0,0,0,1);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  .frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    box-shadow: inset 0 0 80px 40px rgba(0,0,0,0.85);
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<div class="frame"><canvas id="c"></canvas></div>
 <script>
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance' })
