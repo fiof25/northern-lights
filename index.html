@@ -119,11 +119,11 @@ vec3 earthSurface(vec2 uv, float mask) {
   p.x *= 1.08 + depth * 0.22;
   p += vec2(u_time * 0.0035, 0.0);
 
-  vec3 oceanTop = vec3(0.018, 0.36, 0.43);
-  vec3 oceanMid = vec3(0.006, 0.12, 0.22);
-  vec3 oceanDeep = vec3(0.002, 0.018, 0.052);
+  vec3 oceanTop = vec3(0.006, 0.18, 0.36);
+  vec3 oceanMid = vec3(0.002, 0.06, 0.18);
+  vec3 oceanDeep = vec3(0.001, 0.008, 0.06);
   vec3 col = mix(oceanTop, oceanMid, smoothstep(0.0, 0.52, depth));
-  col = mix(col, oceanDeep, pow(depth, 1.55));
+  col = mix(col, oceanDeep, pow(depth, 1.20));
 
   float plates = fbm(p * vec2(1.0, 1.45) + vec2(-2.2, 0.15));
   float coastCurl = fbm(vec2(p.x * 1.55 + sin(p.y * 2.3) * 0.42, p.y * 1.95 - cos(p.x * 2.1) * 0.25));
@@ -131,41 +131,45 @@ vec3 earthSurface(vec2 uv, float mask) {
   float landShape = plates + coastCurl * 0.18 - 0.22 * depth;
   float land = smoothstep(0.60, 0.74, landShape);
   float coast = smoothstep(0.56, 0.65, landShape) - smoothstep(0.66, 0.78, landShape);
-  vec3 forest = vec3(0.055, 0.14, 0.10);
-  vec3 tundra = vec3(0.22, 0.22, 0.18);
-  vec3 desert = vec3(0.36, 0.25, 0.16);
+  vec3 forest = vec3(0.06, 0.20, 0.09);
+  vec3 tundra = vec3(0.30, 0.34, 0.22);
+  vec3 desert = vec3(0.55, 0.38, 0.18);
   vec3 landCol = mix(forest, tundra, smoothstep(0.28, 0.72, p.y + detail * 0.34));
   landCol = mix(landCol, desert, smoothstep(0.62, 0.86, detail));
-  col = mix(col, landCol, land * (0.54 - depth * 0.20));
-  col += vec3(0.11, 0.42, 0.38) * coast * 0.18;
+  col = mix(col, landCol, land * (0.62 - depth * 0.20));
+  col += vec3(0.05, 0.55, 0.48) * coast * 0.22;
 
   float bathy = ridgeNoise(p * vec2(3.7, 5.0) + vec2(1.2, 4.0));
-  col += vec3(0.00, 0.10, 0.12) * bathy * (1.0 - land) * (1.0 - depth) * 0.08;
+  col += vec3(0.00, 0.12, 0.22) * bathy * (1.0 - land) * (1.0 - depth) * 0.12;
 
   float cloudA = ridgeNoise(p * vec2(3.0, 7.0) + vec2(u_time * 0.010, 1.0));
   float cloudB = fbm(p * vec2(7.5, 15.0) + vec2(-2.0 + u_time * 0.016, 5.0));
-  float clouds = smoothstep(0.59, 0.86, cloudA * 0.72 + cloudB * 0.30);
+  float clouds = smoothstep(0.72, 0.92, cloudA * 0.72 + cloudB * 0.30);
   clouds *= smoothstep(0.02, 0.26, uv.x) * (1.0 - smoothstep(0.78, 1.0, uv.x));
   clouds *= 1.0 - smoothstep(0.50, 0.86, depth);
-  col = mix(col, vec3(0.82, 0.88, 0.86), clouds * 0.42);
+  col = mix(col, vec3(0.86, 0.90, 0.92), clouds * 0.32);
 
   float softCloud = ridgeNoise(p * vec2(4.4, 8.0) + vec2(-1.5 + u_time * 0.008, 3.0));
-  softCloud = smoothstep(0.70, 0.92, softCloud) * (1.0 - smoothstep(0.48, 0.86, depth));
-  col = mix(col, vec3(0.74, 0.80, 0.79), softCloud * 0.08);
+  softCloud = smoothstep(0.80, 0.96, softCloud) * (1.0 - smoothstep(0.48, 0.86, depth));
+  col = mix(col, vec3(0.78, 0.84, 0.88), softCloud * 0.06);
 
   float cityGrid = pow(noise(p * vec2(58.0, 42.0)), 13.0) * land * smoothstep(0.45, 0.92, depth);
-  col += vec3(1.0, 0.52, 0.18) * cityGrid * 0.55;
+  col += vec3(1.0, 0.72, 0.28) * cityGrid * 0.70;
 
-  float terminator = smoothstep(0.08, 0.86, uv.x + uv.y * 0.42);
-  col *= mix(0.28, 1.12, terminator);
+  float terminator = smoothstep(0.06, 0.88, uv.x + uv.y * 0.38);
+  col *= mix(0.08, 1.10, terminator);
 
-  float rimLight = exp(-abs(uv.y - horizon) * 40.0) * mask;
-  col += vec3(0.0, 0.86, 0.98) * rimLight * 0.28;
+  // tight aqua atmosphere rim on the limb
+  float rimLight = exp(-abs(uv.y - horizon) * 55.0) * mask;
+  col += vec3(0.00, 0.82, 0.88) * rimLight * 0.90;
+
+  // warm city-side glow on dark terminator
+  col += vec3(0.90, 0.48, 0.08) * rimLight * (1.0 - terminator) * 0.30;
 
   float nearEdge = 1.0 - smoothstep(horizon - 0.13, horizon - 0.02, uv.y);
-  float horizonGlow = exp(-abs(uv.y - horizon) * 24.0);
-  col = mix(col, vec3(0.58, 0.78, 0.78), horizonGlow * 0.12);
-  col *= mix(1.12, 0.72, nearEdge);
+  float horizonGlow = exp(-abs(uv.y - horizon) * 16.0);
+  col = mix(col, vec3(0.04, 0.72, 0.80), horizonGlow * 0.28);
+  col *= mix(1.10, 0.62, nearEdge);
 
   return col * mask;
 }
@@ -180,9 +184,9 @@ vec3 aurora(vec2 uv, float t) {
   float peakA = exp(-pow((uv.x - (0.30 + 0.07 * sin(t * 0.31))) / 0.15, 2.0));
   float peakB = exp(-pow((uv.x - (0.60 + 0.10 * sin(t * 0.19 + 1.8))) / 0.18, 2.0));
   float peakC = exp(-pow((uv.x - (0.78 + 0.06 * sin(t * 0.27 + 3.1))) / 0.12, 2.0));
-  float heightScale = clamp(0.68 + heightNoise * 0.62 + peakA * 0.42 + peakB * 0.52 + peakC * 0.28, 0.62, 1.85);
+  float heightScale = clamp(1.80 + heightNoise * 0.90 + peakA * 0.70 + peakB * 0.80 + peakC * 0.50, 1.60, 4.20);
   float localAbove = shiftedAbove / heightScale;
-  float heightFade = smoothstep(-0.018, 0.012, localAbove) * (1.0 - smoothstep(0.26, 0.46, localAbove));
+  float heightFade = smoothstep(-0.018, 0.012, localAbove) * (1.0 - smoothstep(0.55, 0.90, localAbove));
 
   vec2 flow = vec2(uv.x * 2.65 + t * 0.18, localAbove * 3.8 - t * 0.12);
   float warp = fbm(flow * vec2(2.0, 1.1)) * 0.23;
@@ -191,27 +195,26 @@ vec3 aurora(vec2 uv, float t) {
     + 0.030 * sin(uv.x * 7.8 + t * 1.18)
     + 0.020 * sin(uv.x * 18.0 - t * 0.82)
     + warp * 0.42;
-  float greenBand = exp(-pow((localAbove - center) / 0.050, 2.0));
-  float cyanBand = exp(-pow((localAbove + 0.006) / 0.070, 2.0));
+  float greenBand = exp(-pow((localAbove - center) / 0.028, 2.0));
+  float cyanBand = exp(-pow((localAbove + 0.006) / 0.040, 2.0));
   float relativeHeight = localAbove - center;
-  float lilacEdgeBand = exp(-pow((relativeHeight - 0.060) / 0.920, 2.0));
-  float lowerFlare = exp(-pow((localAbove - 0.008) / 0.030, 2.0));
+  float lilacEdgeBand = exp(-pow((relativeHeight - 0.060) / 1.80, 2.0));
+  float lowerFlare = exp(-pow((localAbove - 0.008) / 0.016, 2.0));
   float upperMist = exp(-max(localAbove - center, 0.0) * 16.0) * smoothstep(0.0, 0.10, localAbove);
 
   float curtains = 0.0;
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float x = uv.x * (16.0 + fi * 8.0) + t * (1.06 + fi * 0.16);
-    float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.46)), 2.25);
-    float thread = pow(noise(vec2(x * 4.1 + t * 0.72, localAbove * 15.0 + fi)), 3.2);
+    float x = uv.x * (7.0 + fi * 3.5) + t * (1.06 + fi * 0.16);
+    float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.46)), 2.80);
+    float thread = pow(noise(vec2(x * 2.2 + t * 0.72, localAbove * 8.0 + fi)), 3.40);
     float vertical = exp(-localAbove * (8.8 + fi * 0.9));
-    float ripple = 0.55 + 0.45 * sin(uv.x * (26.0 + fi * 3.0) - t * (2.2 + fi * 0.12) + fi);
-    curtains += (columns * 0.82 + thread * 0.68) * vertical * ripple;
+    float ripple = 0.78 + 0.22 * sin(uv.x * (10.0 + fi * 1.5) - t * (2.2 + fi * 0.12) + fi);
+    curtains += (columns * 0.68 + thread * 0.46) * vertical * ripple;
   }
 
   float leftBurst = exp(-pow((uv.x - 0.03) / 0.07, 2.0)) * exp(-pow((localAbove - 0.018) / 0.027, 2.0));
-  float travelingPulse = exp(-pow((fract(uv.x * 1.08 - t * 0.16) - 0.18) / 0.105, 2.0))
-                       * exp(-pow((localAbove - center + 0.01) / 0.070, 2.0));
+  float travelingPulse = 0.0;
   float brightPatches =
     exp(-pow((uv.x - 0.24) / 0.13, 2.0)) * 0.85 +
     exp(-pow((uv.x - 0.45) / 0.22, 2.0)) * 0.60 +
@@ -238,9 +241,9 @@ vec3 aurora(vec2 uv, float t) {
   float cyanStrength = cyanBand * sideFade * (0.38 + curtains * 0.30) * 1.42;
   float neonGreenStrength = cyanBand * sideFade * (0.55 + curtains * 0.60) * 1.10;
   float lilacFade = smoothstep(-0.020, 0.040, relativeHeight) * (1.0 - smoothstep(2.20, 3.20, relativeHeight));
-  float lilacHeightFade = smoothstep(-0.02, 0.04, shiftedAbove) * (1.0 - smoothstep(0.72, 1.10, shiftedAbove));
+  float lilacHeightFade = smoothstep(-0.02, 0.04, shiftedAbove) * (1.0 - smoothstep(1.40, 2.10, shiftedAbove));
   float lilacTexture = pow(0.22 + curtains * 0.78, 1.20);
-  float lilacStrength = lilacEdgeBand * lilacFade * lilacHeightFade * sideFade * lilacTexture * 1.40 * 0.50;
+  float lilacStrength = lilacEdgeBand * lilacFade * lilacHeightFade * sideFade * lilacTexture * 2.20 * 0.50;
 
   vec3 aur = vec3(0.0);
   vec3 cyanRim = mix(cyan, neonGreen, 0.35) * cyanStrength;
@@ -256,7 +259,7 @@ vec3 aurora(vec2 uv, float t) {
   aur = screenBlend(aur, cyanRim);
   aur = screenBlend(aur, neonGreenLayer);
   aur = screenBlend(aur, greenRibbon);
-  aur = mix(aur, dodgeBlend(aur, lilacRibbon), 0.53);
+  aur = mix(aur, screenBlend(aur, lilacRibbon * 0.6), 0.45);
   aur += yellowFlare + whiteHot;
   return aur;
 }
@@ -281,18 +284,28 @@ void main() {
   col += starField(uv, t) * smoothstep(horizon + 0.16, horizon + 0.38, uv.y) * 0.80;
 
   vec3 aur = aurora(uv, t);
-  vec3 aurLayer = clamp(aur * (1.0 - planet * 0.32), vec3(0.0), vec3(1.0));
-  col = screenBlend(col, aurLayer);
+  // strong fade: full at horizon, nearly gone high up
+  float aurBaseFade = smoothstep(horizon - 0.02, horizon + 0.12, uv.y);
+  float aurTopFade  = 1.0 - smoothstep(horizon + 0.18, horizon + 0.55, uv.y);
+  float aurOpacity  = aurBaseFade * aurTopFade * aurTopFade;
+  vec3 aurLayer = aur * (1.0 - planet * 0.32) * aurOpacity;
+
+  col = mix(col, screenBlend(col, aurLayer * 0.50), 0.40);
 
   col = mix(col, earthSurface(uv, planet), planet);
 
-  float rim = exp(-abs(uv.y - horizon) * 82.0);
-  float upperRim = smoothstep(horizon - 0.02, horizon + 0.035, uv.y);
-  col += vec3(0.0, 0.86, 1.0) * rim * upperRim * 0.72;
-  col += vec3(0.48, 1.0, 0.68) * rim * upperRim * 0.34;
+  // sharp bright aqua limb line
+  float rim = exp(-abs(uv.y - horizon) * 90.0);
+  float upperRim = smoothstep(horizon - 0.02, horizon + 0.025, uv.y);
+  col += vec3(0.00, 0.92, 0.98) * rim * upperRim * 1.10;
 
-  float bloom = exp(-pow((uv.y - horizon - 0.018) / 0.070, 2.0));
-  col += vec3(0.05, 0.88, 0.66) * bloom * smoothstep(-0.06, 0.08, uv.x) * (1.0 - smoothstep(0.84, 1.06, uv.x)) * 0.24;
+  // wider soft aqua halo that bleeds up into aurora
+  float atmHalo = exp(-pow((uv.y - horizon) / 0.055, 2.0)) * upperRim;
+  col += vec3(0.00, 0.70, 0.80) * atmHalo * 0.55;
+
+  // very wide bleed fading into aurora zone
+  float atmBleed = exp(-max(uv.y - horizon, 0.0) / 0.14) * upperRim;
+  col += vec3(0.00, 0.45, 0.55) * atmBleed * 0.20;
 
   float vignette = 1.0 - dot(p * vec2(0.53, 0.48), p * vec2(0.53, 0.48));
   col *= mix(0.38, 1.06, smoothstep(-0.1, 0.96, vignette));
