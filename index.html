@@ -94,11 +94,11 @@ vec3 starField(vec2 uv, float t) {
 
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float scale = 55.0 + fi * 34.0;
+    float scale = 90.0 + fi * 55.0;
     vec2 cell = floor(uv * scale + fi * 19.31);
     vec2 local = fract(uv * scale + fi * 19.31);
     float rnd = hash12(cell);
-    float gate = smoothstep(0.988 - fi * 0.004, 0.999, rnd);
+    float gate = smoothstep(0.968 - fi * 0.008, 0.999, rnd);
     vec2 p = vec2(hash12(cell + 4.4), hash12(cell + 8.8));
     float d = length(local - p);
     float core = 1.0 - smoothstep(0.0, 0.022, d);
@@ -117,7 +117,7 @@ vec3 earthSurface(vec2 uv, float mask) {
 
   vec2 p = vec2((uv.x - 0.5) * 2.10, (uv.y - 0.02) * 2.38);
   p.x *= 1.08 + depth * 0.22;
-  p += vec2(u_time * 0.0035, 0.0);
+  p += vec2(u_time * 0.018, 0.0);
 
   vec3 oceanTop = vec3(0.006, 0.18, 0.36);
   vec3 oceanMid = vec3(0.002, 0.06, 0.18);
@@ -131,12 +131,12 @@ vec3 earthSurface(vec2 uv, float mask) {
   float landShape = plates + coastCurl * 0.18 - 0.22 * depth;
   float land = smoothstep(0.60, 0.74, landShape);
   float coast = smoothstep(0.56, 0.65, landShape) - smoothstep(0.66, 0.78, landShape);
-  vec3 forest = vec3(0.06, 0.20, 0.09);
-  vec3 tundra = vec3(0.30, 0.34, 0.22);
-  vec3 desert = vec3(0.55, 0.38, 0.18);
+  vec3 forest = vec3(0.02, 0.08, 0.06);
+  vec3 tundra = vec3(0.04, 0.10, 0.12);
+  vec3 desert = vec3(0.05, 0.09, 0.10);
   vec3 landCol = mix(forest, tundra, smoothstep(0.28, 0.72, p.y + detail * 0.34));
   landCol = mix(landCol, desert, smoothstep(0.62, 0.86, detail));
-  col = mix(col, landCol, land * (0.62 - depth * 0.20));
+  col = mix(col, landCol, land * (0.50 - depth * 0.20));
   col += vec3(0.05, 0.55, 0.48) * coast * 0.22;
 
   float bathy = ridgeNoise(p * vec2(3.7, 5.0) + vec2(1.2, 4.0));
@@ -147,14 +147,14 @@ vec3 earthSurface(vec2 uv, float mask) {
   float clouds = smoothstep(0.72, 0.92, cloudA * 0.72 + cloudB * 0.30);
   clouds *= smoothstep(0.02, 0.26, uv.x) * (1.0 - smoothstep(0.78, 1.0, uv.x));
   clouds *= 1.0 - smoothstep(0.50, 0.86, depth);
-  col = mix(col, vec3(0.86, 0.90, 0.92), clouds * 0.32);
+  col = mix(col, vec3(0.30, 0.44, 0.52), clouds * 0.18);
 
   float softCloud = ridgeNoise(p * vec2(4.4, 8.0) + vec2(-1.5 + u_time * 0.008, 3.0));
   softCloud = smoothstep(0.80, 0.96, softCloud) * (1.0 - smoothstep(0.48, 0.86, depth));
-  col = mix(col, vec3(0.78, 0.84, 0.88), softCloud * 0.06);
+  col = mix(col, vec3(0.22, 0.34, 0.42), softCloud * 0.04);
 
   float cityGrid = pow(noise(p * vec2(58.0, 42.0)), 13.0) * land * smoothstep(0.45, 0.92, depth);
-  col += vec3(1.0, 0.72, 0.28) * cityGrid * 0.70;
+  col += vec3(1.0, 0.72, 0.28) * cityGrid * 0.10;
 
   float terminator = smoothstep(0.06, 0.88, uv.x + uv.y * 0.38);
   col *= mix(0.08, 1.10, terminator);
@@ -168,7 +168,7 @@ vec3 earthSurface(vec2 uv, float mask) {
 
   float nearEdge = 1.0 - smoothstep(horizon - 0.13, horizon - 0.02, uv.y);
   float horizonGlow = exp(-abs(uv.y - horizon) * 16.0);
-  col = mix(col, vec3(0.04, 0.72, 0.80), horizonGlow * 0.28);
+  col = mix(col, vec3(0.02, 0.30, 0.44), horizonGlow * 0.22);
   col *= mix(1.10, 0.62, nearEdge);
 
   return col * mask;
