@@ -97,26 +97,30 @@ vec3 screenBlend(vec3 base, vec3 layer) {
   return 1.0 - (1.0 - base) * (1.0 - layer);
 }
 
+vec3 dodgeBlend(vec3 base, vec3 layer) {
+  return clamp(base / max(1.0 - layer, 0.001), 0.0, 1.0);
+}
+
 vec3 starField(vec2 uv, float t) {
   vec3 stars = vec3(0.0);
 
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float scale = 95.0 + fi * 58.0;
+    float scale = 55.0 + fi * 34.0;
     vec2 cell = floor(uv * scale + fi * 19.31);
     vec2 local = fract(uv * scale + fi * 19.31);
     float rnd = hash12(cell);
-    float gate = smoothstep(0.975 - fi * 0.009, 0.999, rnd);
+    float gate = smoothstep(0.988 - fi * 0.004, 0.999, rnd);
     vec2 p = vec2(hash12(cell + 4.4), hash12(cell + 8.8));
     float d = length(local - p);
-    float core = 1.0 - smoothstep(0.0, 0.014, d);
-    float halo = (1.0 - smoothstep(0.0, 0.030, d)) * 0.10;
+    float core = 1.0 - smoothstep(0.0, 0.022, d);
+    float halo = (1.0 - smoothstep(0.0, 0.055, d)) * 0.22;
     float twinkle = 0.72 + 0.28 * sin(t * (0.5 + rnd * 1.5) + rnd * 80.0);
     vec3 tint = mix(vec3(0.86, 0.92, 1.0), vec3(1.0, 1.0, 0.94), hash12(cell + 12.0));
-    stars += tint * (core * 1.65 + halo) * gate * twinkle * (0.80 + fi * 0.16);
+    stars += tint * (core * 2.80 + halo) * gate * twinkle * (0.90 + fi * 0.20);
   }
 
-  float powder = pow(noise(uv * vec2(650.0, 360.0)), 24.0) * 0.10;
+  float powder = pow(noise(uv * vec2(650.0, 360.0)), 28.0) * 0.06;
   return stars + vec3(1.0) * powder;
 }
 
@@ -203,7 +207,7 @@ vec3 aurora(vec2 uv, float t) {
   float greenBand = exp(-pow((localAbove - center) / 0.050, 2.0));
   float cyanBand = exp(-pow((localAbove + 0.006) / 0.070, 2.0));
   float relativeHeight = localAbove - center;
-  float lilacEdgeBand = exp(-pow((relativeHeight - 0.112) / 0.034, 2.0));
+  float lilacEdgeBand = exp(-pow((relativeHeight - 0.060) / 0.110, 2.0));
   float lowerFlare = exp(-pow((localAbove - 0.008) / 0.030, 2.0));
   float upperMist = exp(-max(localAbove - center, 0.0) * 16.0) * smoothstep(0.0, 0.10, localAbove);
 
@@ -237,22 +241,22 @@ vec3 aurora(vec2 uv, float t) {
   vec3 green = vec3(0.42, 1.0, 0.30);
   vec3 mint = vec3(0.18, 1.0, 0.66);
   vec3 cyan = vec3(0.00, 0.92, 1.00);
-  vec3 violet = vec3(0.62, 0.56, 1.00);
-  vec3 purple = vec3(0.80, 0.72, 1.00);
+  vec3 violet = vec3(0.72, 0.10, 1.00);
+  vec3 purple = vec3(0.88, 0.20, 1.00);
 
   float ribbonTexture = clamp(0.35 + curtainBlend * 1.35 + travelingPulse * 0.45, 0.0, 1.6);
   float leftYellow = leftBurst + lowerFlare * exp(-pow((uv.x - 0.18) / 0.32, 2.0)) * 0.34;
   float greenStrength = glow * ribbonTexture * 1.12;
   float cyanStrength = cyanBand * sideFade * (0.38 + curtains * 0.30) * 1.42;
-  float lilacFade = smoothstep(0.066, 0.108, relativeHeight) * (1.0 - smoothstep(0.138, 0.215, relativeHeight));
-  float lilacTexture = pow(0.22 + curtains * 0.78, 1.45);
-  float lilacStrength = lilacEdgeBand * lilacFade * sideFade * lilacTexture * 0.34;
+  float lilacFade = smoothstep(-0.020, 0.040, relativeHeight) * (1.0 - smoothstep(0.280, 0.420, relativeHeight));
+  float lilacTexture = pow(0.22 + curtains * 0.78, 1.20);
+  float lilacStrength = lilacEdgeBand * lilacFade * sideFade * lilacTexture * 1.40 * 0.50;
 
   vec3 aur = vec3(0.0);
   vec3 cyanRim = cyan * cyanStrength;
   vec3 ribbonColor = mix(green, mint, smoothstep(0.0, 0.15, localAbove));
   ribbonColor = mix(ribbonColor, cyan, smoothstep(0.08, 0.20, localAbove) * 0.28);
-  ribbonColor = mix(ribbonColor, mix(violet, purple, 0.45), lilacFade * 0.42);
+  ribbonColor = mix(ribbonColor, mix(violet, purple, 0.45), smoothstep(0.04, 0.14, relativeHeight) * 0.85);
   vec3 greenRibbon = ribbonColor * greenStrength * 2.15;
   vec3 yellowFlare = yellow * leftYellow * sideFade * 1.35;
   vec3 lilacRibbon = mix(violet, purple, 0.35) * lilacStrength;
@@ -260,7 +264,7 @@ vec3 aurora(vec2 uv, float t) {
 
   aur = screenBlend(aur, cyanRim);
   aur = screenBlend(aur, greenRibbon);
-  aur = mix(aur, screenBlend(aur, lilacRibbon), 0.42);
+  aur = mix(aur, dodgeBlend(aur, lilacRibbon), 0.50);
   aur += yellowFlare + whiteHot;
   return aur;
 }
@@ -282,7 +286,7 @@ void main() {
   sky += vec3(0.008, 0.018, 0.055) * exp(-pow((uv.y - 0.43) / 0.18, 2.0)) * 0.22;
 
   vec3 col = sky;
-  col += starField(uv, t) * smoothstep(horizon + 0.16, horizon + 0.38, uv.y) * 0.52;
+  col += starField(uv, t) * smoothstep(horizon + 0.16, horizon + 0.38, uv.y) * 0.80;
 
   vec3 aur = aurora(uv, t);
   vec3 aurLayer = clamp(aur * (1.0 - planet * 0.32), vec3(0.0), vec3(1.0));
