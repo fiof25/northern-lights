@@ -184,36 +184,43 @@ vec3 aurora(vec2 uv, float t) {
   float above = uv.y - horizon;
   float sideFade = smoothstep(-0.08, 0.07, uv.x) * (1.0 - smoothstep(0.82, 1.08, uv.x));
   float shiftedAbove = above + 0.060;
-  float heightFade = smoothstep(-0.018, 0.012, shiftedAbove) * (1.0 - smoothstep(0.26, 0.46, shiftedAbove));
 
-  vec2 flow = vec2(uv.x * 2.65 + t * 0.18, shiftedAbove * 3.8 - t * 0.12);
+  float heightNoise = fbm(vec2(uv.x * 2.15 + t * 0.08, 4.7));
+  float peakA = exp(-pow((uv.x - (0.30 + 0.07 * sin(t * 0.31))) / 0.15, 2.0));
+  float peakB = exp(-pow((uv.x - (0.60 + 0.10 * sin(t * 0.19 + 1.8))) / 0.18, 2.0));
+  float peakC = exp(-pow((uv.x - (0.78 + 0.06 * sin(t * 0.27 + 3.1))) / 0.12, 2.0));
+  float heightScale = clamp(0.68 + heightNoise * 0.62 + peakA * 0.42 + peakB * 0.52 + peakC * 0.28, 0.62, 1.85);
+  float localAbove = shiftedAbove / heightScale;
+  float heightFade = smoothstep(-0.018, 0.012, localAbove) * (1.0 - smoothstep(0.26, 0.46, localAbove));
+
+  vec2 flow = vec2(uv.x * 2.65 + t * 0.18, localAbove * 3.8 - t * 0.12);
   float warp = fbm(flow * vec2(2.0, 1.1)) * 0.23;
 
   float center = 0.012
     + 0.030 * sin(uv.x * 7.8 + t * 1.18)
     + 0.020 * sin(uv.x * 18.0 - t * 0.82)
     + warp * 0.42;
-  float greenBand = exp(-pow((shiftedAbove - center) / 0.050, 2.0));
-  float cyanBand = exp(-pow((shiftedAbove + 0.006) / 0.070, 2.0));
-  float relativeHeight = shiftedAbove - center;
+  float greenBand = exp(-pow((localAbove - center) / 0.050, 2.0));
+  float cyanBand = exp(-pow((localAbove + 0.006) / 0.070, 2.0));
+  float relativeHeight = localAbove - center;
   float lilacEdgeBand = exp(-pow((relativeHeight - 0.112) / 0.034, 2.0));
-  float lowerFlare = exp(-pow((shiftedAbove - 0.008) / 0.030, 2.0));
-  float upperMist = exp(-max(shiftedAbove - center, 0.0) * 16.0) * smoothstep(0.0, 0.10, shiftedAbove);
+  float lowerFlare = exp(-pow((localAbove - 0.008) / 0.030, 2.0));
+  float upperMist = exp(-max(localAbove - center, 0.0) * 16.0) * smoothstep(0.0, 0.10, localAbove);
 
   float curtains = 0.0;
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
     float x = uv.x * (16.0 + fi * 8.0) + t * (1.06 + fi * 0.16);
     float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.46)), 2.25);
-    float thread = pow(noise(vec2(x * 4.1 + t * 0.72, shiftedAbove * 15.0 + fi)), 3.2);
-    float vertical = exp(-shiftedAbove * (8.8 + fi * 0.9));
+    float thread = pow(noise(vec2(x * 4.1 + t * 0.72, localAbove * 15.0 + fi)), 3.2);
+    float vertical = exp(-localAbove * (8.8 + fi * 0.9));
     float ripple = 0.55 + 0.45 * sin(uv.x * (26.0 + fi * 3.0) - t * (2.2 + fi * 0.12) + fi);
     curtains += (columns * 0.82 + thread * 0.68) * vertical * ripple;
   }
 
-  float leftBurst = exp(-pow((uv.x - 0.03) / 0.07, 2.0)) * exp(-pow((shiftedAbove - 0.018) / 0.027, 2.0));
+  float leftBurst = exp(-pow((uv.x - 0.03) / 0.07, 2.0)) * exp(-pow((localAbove - 0.018) / 0.027, 2.0));
   float travelingPulse = exp(-pow((fract(uv.x * 1.08 - t * 0.16) - 0.18) / 0.105, 2.0))
-                       * exp(-pow((shiftedAbove - center + 0.01) / 0.070, 2.0));
+                       * exp(-pow((localAbove - center + 0.01) / 0.070, 2.0));
   float brightPatches =
     exp(-pow((uv.x - 0.24) / 0.13, 2.0)) * 0.85 +
     exp(-pow((uv.x - 0.45) / 0.22, 2.0)) * 0.60 +
@@ -243,8 +250,8 @@ vec3 aurora(vec2 uv, float t) {
 
   vec3 aur = vec3(0.0);
   vec3 cyanRim = cyan * cyanStrength;
-  vec3 ribbonColor = mix(green, mint, smoothstep(0.0, 0.15, shiftedAbove));
-  ribbonColor = mix(ribbonColor, cyan, smoothstep(0.08, 0.20, shiftedAbove) * 0.28);
+  vec3 ribbonColor = mix(green, mint, smoothstep(0.0, 0.15, localAbove));
+  ribbonColor = mix(ribbonColor, cyan, smoothstep(0.08, 0.20, localAbove) * 0.28);
   ribbonColor = mix(ribbonColor, mix(violet, purple, 0.45), lilacFade * 0.42);
   vec3 greenRibbon = ribbonColor * greenStrength * 2.15;
   vec3 yellowFlare = yellow * leftYellow * sideFade * 1.35;
