@@ -195,8 +195,8 @@ vec3 aurora(vec2 uv, float t) {
     + 0.030 * sin(uv.x * 7.8 + t * 1.18)
     + 0.020 * sin(uv.x * 18.0 - t * 0.82)
     + warp * 0.42;
-  float greenBand = exp(-pow((localAbove - center) / 0.028, 2.0));
-  float cyanBand = exp(-pow((localAbove + 0.006) / 0.040, 2.0));
+  float greenBand = exp(-pow((localAbove - center) / 0.040, 2.0));
+  float cyanBand = exp(-pow((localAbove + 0.006) / 0.055, 2.0));
   float relativeHeight = localAbove - center;
   float lilacEdgeBand = exp(-pow((relativeHeight - 0.060) / 1.80, 2.0));
   float lowerFlare = exp(-pow((localAbove - 0.008) / 0.016, 2.0));
