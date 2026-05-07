@@ -93,6 +93,10 @@ float earthMask(vec2 uv) {
   return 1.0 - smoothstep(y - 0.012, y + 0.004, uv.y);
 }
 
+vec3 screenBlend(vec3 base, vec3 layer) {
+  return 1.0 - (1.0 - base) * (1.0 - layer);
+}
+
 vec3 starField(vec2 uv, float t) {
   vec3 stars = vec3(0.0);
 
@@ -179,8 +183,8 @@ vec3 aurora(vec2 uv, float t) {
   float horizon = limbY(uv.x);
   float above = uv.y - horizon;
   float sideFade = smoothstep(-0.08, 0.07, uv.x) * (1.0 - smoothstep(0.82, 1.08, uv.x));
-  float shiftedAbove = above + 0.070;
-  float heightFade = smoothstep(-0.018, 0.012, shiftedAbove) * (1.0 - smoothstep(0.22, 0.40, shiftedAbove));
+  float shiftedAbove = above + 0.060;
+  float heightFade = smoothstep(-0.018, 0.012, shiftedAbove) * (1.0 - smoothstep(0.26, 0.46, shiftedAbove));
 
   vec2 flow = vec2(uv.x * 2.65 + t * 0.18, shiftedAbove * 3.8 - t * 0.12);
   float warp = fbm(flow * vec2(2.0, 1.1)) * 0.23;
@@ -189,9 +193,12 @@ vec3 aurora(vec2 uv, float t) {
     + 0.030 * sin(uv.x * 7.8 + t * 1.18)
     + 0.020 * sin(uv.x * 18.0 - t * 0.82)
     + warp * 0.42;
-  float band = exp(-pow((shiftedAbove - center) / 0.046, 2.0));
-  float lowerFlare = exp(-pow((shiftedAbove - 0.012) / 0.032, 2.0));
-  float upperMist = exp(-max(shiftedAbove - center, 0.0) * 18.0) * smoothstep(0.0, 0.09, shiftedAbove);
+  float greenBand = exp(-pow((shiftedAbove - center) / 0.050, 2.0));
+  float cyanBand = exp(-pow((shiftedAbove + 0.006) / 0.070, 2.0));
+  float relativeHeight = shiftedAbove - center;
+  float lilacEdgeBand = exp(-pow((relativeHeight - 0.112) / 0.034, 2.0));
+  float lowerFlare = exp(-pow((shiftedAbove - 0.008) / 0.030, 2.0));
+  float upperMist = exp(-max(shiftedAbove - center, 0.0) * 16.0) * smoothstep(0.0, 0.10, shiftedAbove);
 
   float curtains = 0.0;
   for (int i = 0; i < 4; i++) {
@@ -212,40 +219,43 @@ vec3 aurora(vec2 uv, float t) {
     exp(-pow((uv.x - 0.45) / 0.22, 2.0)) * 0.60 +
     exp(-pow((uv.x - 0.72) / 0.26, 2.0)) * 0.48;
 
-  float curtainBlend = clamp(curtains * band, 0.0, 1.0);
-  float glow = (band * (0.72 + curtains * 1.70) + lowerFlare * 0.95 + upperMist * 0.12);
+  float curtainBlend = clamp(curtains * greenBand, 0.0, 1.0);
+  float glow = (greenBand * (0.58 + curtains * 1.95) + lowerFlare * 0.86);
   glow *= sideFade * heightFade;
   glow += leftBurst * 2.15;
   glow += travelingPulse * 1.05;
   glow *= 0.92 + brightPatches;
 
-  vec3 yellow = vec3(1.0, 0.96, 0.26);
-  vec3 green = vec3(0.50, 1.0, 0.44);
-  vec3 mint = vec3(0.34, 1.0, 0.70);
-  vec3 cyan = vec3(0.02, 0.78, 0.92);
-  vec3 violet = vec3(0.72, 0.18, 1.00);
-  vec3 purple = vec3(1.00, 0.22, 0.95);
+  vec3 yellow = vec3(1.0, 0.98, 0.18);
+  vec3 green = vec3(0.42, 1.0, 0.30);
+  vec3 mint = vec3(0.18, 1.0, 0.66);
+  vec3 cyan = vec3(0.00, 0.92, 1.00);
+  vec3 violet = vec3(0.62, 0.56, 1.00);
+  vec3 purple = vec3(0.80, 0.72, 1.00);
 
-  float turquoiseFade = smoothstep(0.035, 0.18, shiftedAbove) * (1.0 - smoothstep(0.30, 0.48, shiftedAbove));
-  float purpleFade = smoothstep(0.13, 0.25, shiftedAbove) * (1.0 - smoothstep(0.35, 0.50, shiftedAbove));
-  vec3 col = mix(green, mint, smoothstep(0.025, 0.12, shiftedAbove));
-  col = mix(col, cyan, turquoiseFade * 0.72);
-  col = mix(col, yellow, leftBurst * 0.65 + lowerFlare * 0.18);
-  col = mix(col, violet, purpleFade * 0.48);
+  float ribbonTexture = clamp(0.35 + curtainBlend * 1.35 + travelingPulse * 0.45, 0.0, 1.6);
+  float leftYellow = leftBurst + lowerFlare * exp(-pow((uv.x - 0.18) / 0.32, 2.0)) * 0.34;
+  float greenStrength = glow * ribbonTexture * 1.12;
+  float cyanStrength = cyanBand * sideFade * (0.38 + curtains * 0.30) * 1.42;
+  float lilacFade = smoothstep(0.066, 0.108, relativeHeight) * (1.0 - smoothstep(0.138, 0.215, relativeHeight));
+  float lilacTexture = pow(0.22 + curtains * 0.78, 1.45);
+  float lilacStrength = lilacEdgeBand * lilacFade * sideFade * lilacTexture * 0.34;
 
-  vec3 atmosphere = vec3(0.02, 0.72, 0.68) * exp(-max(shiftedAbove, 0.0) * 36.0) * sideFade * 0.26;
-  vec3 greenMist = mix(green, cyan, turquoiseFade)
-                 * upperMist
-                 * (0.20 + curtainBlend * 0.95)
-                 * sideFade
-                 * 0.22;
-  vec3 purpleMist = mix(violet, purple, smoothstep(0.16, 0.30, shiftedAbove))
-                  * purpleFade
-                  * pow(upperMist, 1.55)
-                  * (0.12 + curtainBlend * 0.88)
-                  * sideFade
-                  * 0.24;
-  return atmosphere + greenMist + purpleMist + col * glow * 2.42;
+  vec3 aur = vec3(0.0);
+  vec3 cyanRim = cyan * cyanStrength;
+  vec3 ribbonColor = mix(green, mint, smoothstep(0.0, 0.15, shiftedAbove));
+  ribbonColor = mix(ribbonColor, cyan, smoothstep(0.08, 0.20, shiftedAbove) * 0.28);
+  ribbonColor = mix(ribbonColor, mix(violet, purple, 0.45), lilacFade * 0.42);
+  vec3 greenRibbon = ribbonColor * greenStrength * 2.15;
+  vec3 yellowFlare = yellow * leftYellow * sideFade * 1.35;
+  vec3 lilacRibbon = mix(violet, purple, 0.35) * lilacStrength;
+  vec3 whiteHot = vec3(0.92, 1.0, 0.82) * pow(greenBand * (0.35 + curtains), 2.4) * sideFade * 0.60;
+
+  aur = screenBlend(aur, cyanRim);
+  aur = screenBlend(aur, greenRibbon);
+  aur = mix(aur, screenBlend(aur, lilacRibbon), 0.42);
+  aur += yellowFlare + whiteHot;
+  return aur;
 }
 
 void main() {
@@ -269,7 +279,7 @@ void main() {
 
   vec3 aur = aurora(uv, t);
   vec3 aurLayer = clamp(aur * (1.0 - planet * 0.32), vec3(0.0), vec3(1.0));
-  col = 1.0 - (1.0 - col) * (1.0 - aurLayer);
+  col = screenBlend(col, aurLayer);
 
   col = mix(col, earthSurface(uv, planet), planet);
 
