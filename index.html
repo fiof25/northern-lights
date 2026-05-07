@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Northern Lights From Orbit</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #00020a; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .grain {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: .12;
+    mix-blend-mode: screen;
+    background-image:
+      radial-gradient(circle at 22% 26%, rgba(255,255,255,.16) 0 1px, transparent 1.4px),
+      radial-gradient(circle at 71% 41%, rgba(255,255,255,.10) 0 1px, transparent 1.2px);
+    background-size: 137px 131px, 179px 173px;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="grain" aria-hidden="true"></div>
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance' })
+  || canvas.getContext('experimental-webgl');
+
+if (!gl) {
+  document.body.innerHTML = '<p style="color:white;font:20px serif;text-align:center;padding-top:40vh">WebGL is not supported in this browser.</p>';
+  throw new Error('WebGL unavailable');
+}
+
+const VERT = `
+attribute vec2 a_pos;
+void main() {
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+const FRAG = `
+precision highp float;
+
+uniform vec2 u_res;
+uniform float u_time;
+
+#define PI 3.14159265359
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash12(i);
+  float b = hash12(i + vec2(1.0, 0.0));
+  float c = hash12(i + vec2(0.0, 1.0));
+  float d = hash12(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  mat2 r = mat2(0.82, 0.57, -0.57, 0.82);
+  for (int i = 0; i < 4; i++) {
+    v += a * noise(p);
+    p = r * p * 2.03 + vec2(3.7, -1.8);
+    a *= 0.52;
+  }
+  return v;
+}
+
+float ridgeNoise(vec2 p) {
+  float n = fbm(p);
+  return 1.0 - abs(n * 2.0 - 1.0);
+}
+
+float limbY(float x) {
+  float sx = (x - 0.5) / 0.68;
+  return 0.352 - 0.17 * sx * sx;
+}
+
+float earthMask(vec2 uv) {
+  float y = limbY(uv.x);
+  return 1.0 - smoothstep(y - 0.012, y + 0.004, uv.y);
+}
+
+vec3 starField(vec2 uv, float t) {
+  vec3 stars = vec3(0.0);
+
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float scale = 95.0 + fi * 58.0;
+    vec2 cell = floor(uv * scale + fi * 19.31);
+    vec2 local = fract(uv * scale + fi * 19.31);
+    float rnd = hash12(cell);
+    float gate = smoothstep(0.975 - fi * 0.009, 0.999, rnd);
+    vec2 p = vec2(hash12(cell + 4.4), hash12(cell + 8.8));
+    float d = length(local - p);
+    float core = 1.0 - smoothstep(0.0, 0.018, d);
+    float halo = (1.0 - smoothstep(0.0, 0.044, d)) * 0.18;
+    float twinkle = 0.58 + 0.42 * sin(t * (0.5 + rnd * 1.5) + rnd * 80.0);
+    vec3 tint = mix(vec3(0.62, 0.72, 1.0), vec3(1.0, 0.95, 0.78), hash12(cell + 12.0));
+    stars += tint * (core + halo) * gate * twinkle * (0.55 + fi * 0.14);
+  }
+
+  float powder = pow(noise(uv * vec2(650.0, 360.0)), 18.0) * 0.16;
+  return stars + vec3(0.75, 0.84, 1.0) * powder;
+}
+
+vec3 earthSurface(vec2 uv, float mask) {
+  float horizon = limbY(uv.x);
+  float depth = clamp((horizon - uv.y) / 0.55, 0.0, 1.0);
+
+  vec2 p = vec2((uv.x - 0.5) * 2.10, (uv.y - 0.02) * 2.38);
+  p.x *= 1.08 + depth * 0.22;
+  p += vec2(u_time * 0.0035, 0.0);
+
+  vec3 oceanTop = vec3(0.018, 0.36, 0.43);
+  vec3 oceanMid = vec3(0.006, 0.12, 0.22);
+  vec3 oceanDeep = vec3(0.002, 0.018, 0.052);
+  vec3 col = mix(oceanTop, oceanMid, smoothstep(0.0, 0.52, depth));
+  col = mix(col, oceanDeep, pow(depth, 1.55));
+
+  float plates = fbm(p * vec2(1.0, 1.45) + vec2(-2.2, 0.15));
+  float coastCurl = fbm(vec2(p.x * 1.55 + sin(p.y * 2.3) * 0.42, p.y * 1.95 - cos(p.x * 2.1) * 0.25));
+  float detail = fbm(p * 5.8 + vec2(4.0, -1.4));
+  float landShape = plates + coastCurl * 0.18 - 0.22 * depth;
+  float land = smoothstep(0.60, 0.74, landShape);
+  float coast = smoothstep(0.56, 0.65, landShape) - smoothstep(0.66, 0.78, landShape);
+  vec3 forest = vec3(0.055, 0.14, 0.10);
+  vec3 tundra = vec3(0.22, 0.22, 0.18);
+  vec3 desert = vec3(0.36, 0.25, 0.16);
+  vec3 landCol = mix(forest, tundra, smoothstep(0.28, 0.72, p.y + detail * 0.34));
+  landCol = mix(landCol, desert, smoothstep(0.62, 0.86, detail));
+  col = mix(col, landCol, land * (0.54 - depth * 0.20));
+  col += vec3(0.11, 0.42, 0.38) * coast * 0.18;
+
+  float bathy = ridgeNoise(p * vec2(3.7, 5.0) + vec2(1.2, 4.0));
+  col += vec3(0.00, 0.10, 0.12) * bathy * (1.0 - land) * (1.0 - depth) * 0.08;
+
+  float cloudA = ridgeNoise(p * vec2(3.0, 7.0) + vec2(u_time * 0.010, 1.0));
+  float cloudB = fbm(p * vec2(7.5, 15.0) + vec2(-2.0 + u_time * 0.016, 5.0));
+  float clouds = smoothstep(0.59, 0.86, cloudA * 0.72 + cloudB * 0.30);
+  clouds *= smoothstep(0.02, 0.26, uv.x) * (1.0 - smoothstep(0.78, 1.0, uv.x));
+  clouds *= 1.0 - smoothstep(0.50, 0.86, depth);
+  col = mix(col, vec3(0.82, 0.88, 0.86), clouds * 0.42);
+
+  float softCloud = ridgeNoise(p * vec2(4.4, 8.0) + vec2(-1.5 + u_time * 0.008, 3.0));
+  softCloud = smoothstep(0.70, 0.92, softCloud) * (1.0 - smoothstep(0.48, 0.86, depth));
+  col = mix(col, vec3(0.74, 0.80, 0.79), softCloud * 0.08);
+
+  float cityGrid = pow(noise(p * vec2(58.0, 42.0)), 13.0) * land * smoothstep(0.45, 0.92, depth);
+  col += vec3(1.0, 0.52, 0.18) * cityGrid * 0.55;
+
+  float terminator = smoothstep(0.08, 0.86, uv.x + uv.y * 0.42);
+  col *= mix(0.28, 1.12, terminator);
+
+  float rimLight = exp(-abs(uv.y - horizon) * 40.0) * mask;
+  col += vec3(0.0, 0.86, 0.98) * rimLight * 0.28;
+
+  float nearEdge = 1.0 - smoothstep(horizon - 0.13, horizon - 0.02, uv.y);
+  float horizonGlow = exp(-abs(uv.y - horizon) * 24.0);
+  col = mix(col, vec3(0.58, 0.78, 0.78), horizonGlow * 0.12);
+  col *= mix(1.12, 0.72, nearEdge);
+  return col * mask;
+}
+
+vec3 aurora(vec2 uv, float t) {
+  float horizon = limbY(uv.x);
+  float above = uv.y - horizon;
+  float sideFade = smoothstep(-0.08, 0.07, uv.x) * (1.0 - smoothstep(0.82, 1.08, uv.x));
+  float shiftedAbove = above + 0.070;
+  float heightFade = smoothstep(-0.018, 0.012, shiftedAbove) * (1.0 - smoothstep(0.22, 0.40, shiftedAbove));
+
+  vec2 flow = vec2(uv.x * 2.65 + t * 0.18, shiftedAbove * 3.8 - t * 0.12);
+  float warp = fbm(flow * vec2(2.0, 1.1)) * 0.23;
+
+  float center = 0.012
+    + 0.030 * sin(uv.x * 7.8 + t * 1.18)
+    + 0.020 * sin(uv.x * 18.0 - t * 0.82)
+    + warp * 0.42;
+  float band = exp(-pow((shiftedAbove - center) / 0.046, 2.0));
+  float lowerFlare = exp(-pow((shiftedAbove - 0.012) / 0.032, 2.0));
+  float upperMist = exp(-max(shiftedAbove - center, 0.0) * 12.5) * smoothstep(0.0, 0.11, shiftedAbove);
+
+  float curtains = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float x = uv.x * (16.0 + fi * 8.0) + t * (1.06 + fi * 0.16);
+    float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.46)), 2.25);
+    float thread = pow(noise(vec2(x * 4.1 + t * 0.72, shiftedAbove * 15.0 + fi)), 3.2);
+    float vertical = exp(-shiftedAbove * (8.8 + fi * 0.9));
+    float ripple = 0.55 + 0.45 * sin(uv.x * (26.0 + fi * 3.0) - t * (2.2 + fi * 0.12) + fi);
+    curtains += (columns * 0.82 + thread * 0.68) * vertical * ripple;
+  }
+
+  float leftBurst = exp(-pow((uv.x - 0.03) / 0.07, 2.0)) * exp(-pow((shiftedAbove - 0.018) / 0.027, 2.0));
+  float travelingPulse = exp(-pow((fract(uv.x * 1.08 - t * 0.16) - 0.18) / 0.105, 2.0))
+                       * exp(-pow((shiftedAbove - center + 0.01) / 0.070, 2.0));
+  float brightPatches =
+    exp(-pow((uv.x - 0.24) / 0.13, 2.0)) * 0.85 +
+    exp(-pow((uv.x - 0.45) / 0.22, 2.0)) * 0.60 +
+    exp(-pow((uv.x - 0.72) / 0.26, 2.0)) * 0.48;
+
+  float glow = (band * (0.82 + curtains * 1.28) + lowerFlare * 1.10 + upperMist * 0.30);
+  glow *= sideFade * heightFade;
+  glow += leftBurst * 2.15;
+  glow += travelingPulse * 1.05;
+  glow *= 0.92 + brightPatches;
+
+  vec3 yellow = vec3(1.0, 0.96, 0.26);
+  vec3 green = vec3(0.50, 1.0, 0.44);
+  vec3 mint = vec3(0.34, 1.0, 0.70);
+  vec3 cyan = vec3(0.02, 0.78, 0.92);
+  vec3 violet = vec3(0.34, 0.22, 0.72);
+  vec3 purple = vec3(0.54, 0.25, 0.82);
+
+  float purpleFade = smoothstep(0.070, 0.24, shiftedAbove) * (1.0 - smoothstep(0.34, 0.52, shiftedAbove));
+  vec3 col = mix(green, mint, smoothstep(0.025, 0.12, shiftedAbove));
+  col = mix(col, cyan, smoothstep(0.10, 0.22, shiftedAbove) * 0.48);
+  col = mix(col, yellow, leftBurst * 0.65 + lowerFlare * 0.18);
+  col = mix(col, violet, purpleFade * 0.55);
+
+  vec3 atmosphere = vec3(0.0, 0.58, 0.76) * exp(-max(shiftedAbove, 0.0) * 25.0) * sideFade * 0.42;
+  vec3 purpleMist = mix(violet, purple, smoothstep(0.08, 0.28, shiftedAbove))
+                  * purpleFade
+                  * upperMist
+                  * sideFade
+                  * 0.62;
+  return atmosphere + purpleMist + col * glow * 2.05;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res.xy;
+  vec2 p = (gl_FragCoord.xy * 2.0 - u_res.xy) / u_res.y;
+  float t = u_time;
+
+  float horizon = limbY(uv.x);
+  float planet = earthMask(uv);
+
+  vec3 top = vec3(0.000, 0.002, 0.012);
+  vec3 mid = vec3(0.002, 0.006, 0.026);
+  vec3 low = vec3(0.006, 0.014, 0.050);
+  float skyT = smoothstep(0.05, 1.0, uv.y);
+  vec3 sky = mix(low, mid, smoothstep(0.0, 0.54, skyT));
+  sky = mix(sky, top, smoothstep(0.48, 1.0, skyT));
+  sky += vec3(0.008, 0.018, 0.055) * exp(-pow((uv.y - 0.43) / 0.18, 2.0)) * 0.22;
+
+  vec3 col = sky;
+  col += starField(uv, t) * smoothstep(horizon + 0.16, horizon + 0.38, uv.y) * 0.18;
+
+  vec3 aur = aurora(uv, t);
+  col += aur * (1.0 - planet * 0.32);
+
+  col = mix(col, earthSurface(uv, planet), planet);
+
+  float rim = exp(-abs(uv.y - horizon) * 82.0);
+  float upperRim = smoothstep(horizon - 0.02, horizon + 0.035, uv.y);
+  col += vec3(0.0, 0.86, 1.0) * rim * upperRim * 0.72;
+  col += vec3(0.48, 1.0, 0.68) * rim * upperRim * 0.34;
+
+  float bloom = exp(-pow((uv.y - horizon - 0.018) / 0.070, 2.0));
+  col += vec3(0.05, 0.88, 0.66) * bloom * smoothstep(-0.06, 0.08, uv.x) * (1.0 - smoothstep(0.84, 1.06, uv.x)) * 0.24;
+
+  float vignette = 1.0 - dot(p * vec2(0.53, 0.48), p * vec2(0.53, 0.48));
+  col *= mix(0.38, 1.06, smoothstep(-0.1, 0.96, vignette));
+
+  float grain = hash12(gl_FragCoord.xy + t) - 0.5;
+  col += grain * 0.018;
+
+  col = max(col, vec3(0.0));
+  col = col / (col + vec3(0.82));
+  float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(lum), col, 1.22);
+  col = pow(col, vec3(1.0 / 2.2));
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function shader(type, source) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, source);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    console.error(log);
+    throw new Error(log);
+  }
+  return s;
+}
+
+const program = gl.createProgram();
+gl.attachShader(program, shader(gl.VERTEX_SHADER, VERT));
+gl.attachShader(program, shader(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(program);
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+  throw new Error(gl.getProgramInfoLog(program));
+}
+gl.useProgram(program);
+
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+const pos = gl.getAttribLocation(program, 'a_pos');
+gl.enableVertexAttribArray(pos);
+gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+const uRes = gl.getUniformLocation(program, 'u_res');
+const uTime = gl.getUniformLocation(program, 'u_time');
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.15);
+  const width = Math.max(1, Math.floor(window.innerWidth * dpr));
+  const height = Math.max(1, Math.floor(window.innerHeight * dpr));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    gl.viewport(0, 0, width, height);
+  }
+}
+
+window.addEventListener('resize', resize);
+resize();
+
+let lastFrame = 0;
+const frameInterval = 1000 / 30;
+
+function render(ms) {
+  requestAnimationFrame(render);
+  if (document.hidden || ms - lastFrame < frameInterval) return;
+  lastFrame = ms;
+
+  resize();
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1f(uTime, ms * 0.001);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
