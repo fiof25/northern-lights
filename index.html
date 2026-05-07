@@ -16,7 +16,7 @@
     width: 58vw;
     height: 36vw;
     max-height: 72vh;
-    border-radius: 20px;
+    border-radius: 0;
     overflow: hidden;
     box-shadow: 0 0 120px 60px rgba(3,7,20,0.95), 0 0 40px 12px rgba(3,7,20,1);
   }
@@ -27,9 +27,9 @@
     left: 50%;
     transform: translateX(-50%);
     color: #f5d842;
-    font-family: 'Times New Roman', Times, serif;
+    font-family: Arial, sans-serif;
     font-size: 1.5vw;
-    font-style: default;
+    font-style: italic;
     letter-spacing: -0.02em;
     text-align: center;
     white-space: nowrap;
@@ -40,7 +40,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 20px;
+    border-radius: 0;
     box-shadow: inset 0 0 140px 140px rgba(3,7,20,0.50);
     pointer-events: none;
   }
@@ -49,7 +49,7 @@
 <body>
 <div class="frame">
   <canvas id="c"></canvas>
-  <div class="caption">sometimes you just need to find someone to be brave for</div>
+  <div class="caption">find someone to be brave for</div>
 </div>
 <script>
 const canvas = document.getElementById('c');
@@ -220,20 +220,20 @@ vec3 aurora(vec2 uv, float t) {
   float sideFade = smoothstep(-0.08, 0.07, uv.x) * (1.0 - smoothstep(0.82, 1.08, uv.x));
   float shiftedAbove = above + 0.060;
 
-  float heightNoise = fbm(vec2(uv.x * 2.15 + t * 0.048, 4.7));
-  float peakA = exp(-pow((uv.x - (0.30 + 0.07 * sin(t * 0.19))) / 0.15, 2.0));
-  float peakB = exp(-pow((uv.x - (0.60 + 0.10 * sin(t * 0.11 + 1.8))) / 0.18, 2.0));
-  float peakC = exp(-pow((uv.x - (0.78 + 0.06 * sin(t * 0.16 + 3.1))) / 0.12, 2.0));
+  float heightNoise = fbm(vec2(uv.x * 2.15 + t * 0.022, 4.7));
+  float peakA = exp(-pow((uv.x - (0.30 + 0.07 * sin(t * 0.08))) / 0.15, 2.0));
+  float peakB = exp(-pow((uv.x - (0.60 + 0.10 * sin(t * 0.05 + 1.8))) / 0.18, 2.0));
+  float peakC = exp(-pow((uv.x - (0.78 + 0.06 * sin(t * 0.07 + 3.1))) / 0.12, 2.0));
   float heightScale = clamp(1.80 + heightNoise * 0.90 + peakA * 0.70 + peakB * 0.80 + peakC * 0.50, 1.60, 4.20);
   float localAbove = shiftedAbove / heightScale;
   float heightFade = smoothstep(-0.018, 0.012, localAbove) * (1.0 - smoothstep(0.55, 0.90, localAbove));
 
-  vec2 flow = vec2(uv.x * 2.65 + t * 0.10, localAbove * 3.8 - t * 0.07);
+  vec2 flow = vec2(uv.x * 2.65 + t * 0.045, localAbove * 3.8 - t * 0.03);
   float warp = fbm(flow * vec2(2.0, 1.1)) * 0.23;
 
   float center = 0.012
-    + 0.030 * sin(uv.x * 7.8 + t * 0.70)
-    + 0.020 * sin(uv.x * 18.0 - t * 0.49)
+    + 0.030 * sin(uv.x * 7.8 + t * 0.32)
+    + 0.020 * sin(uv.x * 18.0 - t * 0.22)
     + warp * 0.42;
   float greenBand = exp(-pow((localAbove - center) / 0.040, 2.0));
   float cyanBand = exp(-pow((localAbove + 0.006) / 0.055, 2.0));
@@ -245,9 +245,9 @@ vec3 aurora(vec2 uv, float t) {
   float curtains = 0.0;
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float x = uv.x * (7.0 + fi * 3.5) + t * (1.06 + fi * 0.16);
-    float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.46)), 2.80);
-    float thread = pow(noise(vec2(x * 2.2 + t * 0.72, localAbove * 8.0 + fi)), 3.40);
+    float x = uv.x * (7.0 + fi * 3.5) + t * (0.45 + fi * 0.07);
+    float columns = pow(noise(vec2(x, fi * 4.0 + t * 0.20)), 2.80);
+    float thread = pow(noise(vec2(x * 2.2 + t * 0.30, localAbove * 8.0 + fi)), 3.40);
     float vertical = exp(-localAbove * (8.8 + fi * 0.9));
     float ripple = 0.78 + 0.22 * sin(uv.x * (10.0 + fi * 1.5) - t * (2.2 + fi * 0.12) + fi);
     curtains += (columns * 0.68 + thread * 0.46) * vertical * ripple;
